@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
-} from "./core.js?v=10";
+} from "./core.js?v=14";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -233,7 +233,8 @@ function openDrawer(id, tab = "overview") {
       <div class="d-title"><h2>${esc(s.name)}</h2>
         <div class="sub"><span>${esc(s.host || s.domain)}</span>
           ${s.regions.map((r) => `<span class="tag reg">${regName(r)}</span>`).join("")}
-          ${s.categories.slice(0, 3).map((c) => `<span class="tag">${esc(catName(c.id))}</span>`).join("")}</div></div>
+          ${s.categories.slice(0, 1).map((c) => `<span class="tag">${esc(catName(c.id))}</span>`).join("")}
+          ${s.categories.length > 1 ? `<span class="tag">+${s.categories.length - 1}</span>` : ""}</div></div>
       <div class="dd d-status"><button class="dd-btn ${status ? "set" : ""}" data-dd="status">${status ? esc(status) : "В список"}${ICON.down}</button></div>
       <button class="icon-btn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
@@ -283,19 +284,37 @@ function setDrawerTab(tab) {
 }
 
 function openRfq(s, city) {
-  const text = rfqText(s, { city, categoryNames: Object.fromEntries(S.data.categories.map((c) => [c.id, c.name])) });
+  const me = Object.assign({ name: "", company: "", city: S.f.region === "msk" ? "Москва" : "Екатеринбург", contact: "" }, store.get("me", {}));
   const email = s.contacts.emails[0];
+  const names = Object.fromEntries(S.data.categories.map((c) => [c.id, c.name]));
+  const field = (k, label) => `<label class="fld"><span>${label}</span><input data-me="${k}" value="${esc(me[k])}" autocomplete="off"></label>`;
   $("#modal").innerHTML = `<div class="modal-box rfq-box" role="dialog" aria-label="Запрос КП">
-    <div class="modal-head"><h2>Запрос КП · ${esc(s.name)}</h2><button class="icon-btn" data-close-modal aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="rfq-body"><textarea class="rfq" id="rfq">${esc(text)}</textarea>
-      <div class="row"><button class="btn primary" id="copyRfq">Скопировать</button>
-      ${email ? `<button class="btn ghost" id="mailRfq">Открыть в почте</button>` : ""}</div></div></div>`;
+    <div class="modal-head"><div><h2>Запрос КП</h2><div class="muted rfq-to">${esc(s.name)}</div></div>
+      <button class="icon-btn" data-close-modal aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="rfq-body">
+      <div class="fld-grid">${field("name", "Имя")}${field("company", "Компания")}${field("city", "Город поставки")}${field("contact", "Телефон или почта")}</div>
+      <div class="letter">
+        <div class="letter-meta"><span>Кому</span><b>${esc(email || s.contacts.phones[0] || s.host || s.domain)}</b></div>
+        <div class="letter-meta"><span>Тема</span><b>Запрос коммерческого предложения</b></div>
+        <div class="letter-text" id="rfqText"></div>
+      </div>
+    </div>
+    <div class="rfq-foot">
+      ${email ? `<button class="btn ghost" id="mailRfq">${ICON.mail}Открыть в почте</button>` : ""}
+      <button class="btn primary" id="copyRfq">Скопировать</button>
+    </div></div>`;
+  const text = () => rfqText(s, { ...me, categoryNames: names });
+  const paint = () => { $("#rfqText").textContent = text(); };
+  paint();
+  $("#modal").querySelectorAll("[data-me]").forEach((inp) => inp.addEventListener("input", () => {
+    me[inp.dataset.me] = inp.value.trim(); store.set("me", me); paint();
+  }));
   $("#modal").hidden = false;
   $("#copyRfq").onclick = async () => {
-    try { await navigator.clipboard.writeText($("#rfq").value); toast("Текст скопирован"); } catch { $("#rfq").select(); toast("Выделил текст, скопируйте"); }
+    try { await navigator.clipboard.writeText(text()); toast("Текст скопирован"); } catch { toast("Не удалось скопировать"); }
   };
   if (email) $("#mailRfq").onclick = () => {
-    location.href = `mailto:${email}?subject=${encodeURIComponent("Запрос коммерческого предложения")}&body=${encodeURIComponent($("#rfq").value)}`;
+    location.href = `mailto:${email}?subject=${encodeURIComponent("Запрос коммерческого предложения")}&body=${encodeURIComponent(text())}`;
   };
 }
 
@@ -338,13 +357,13 @@ function renderCompare() {
     if (key === "contacts") return `<td>${s.contacts.phones.map((p) => `<a href="tel:${p.replace(/[^\d+]/g, "")}">${esc(p)}</a>`).join("<br>")}
       ${s.contacts.emails.map((e) => `<br><a href="mailto:${esc(e)}">${esc(e)}</a>`).join("")}</td>`;
     const v = s.facts?.[key]?.value;
-    return v ? `<td class="${best ? "best" : ""}">${esc(v)}</td>` : `<td class="no">нет данных</td>`;
+    return v ? `<td class="${best ? "best" : ""}"><div class="clamp">${esc(v)}</div></td>` : `<td class="no">нет данных</td>`;
   };
   const body = rowsDef.map((r) => {
     const best = ["score", "regions", "contacts", "cats"].includes(r.key) || list.length < 2 ? list.map(() => false) : bestInRow(list, r.key);
     return `<tr><td>${r.label}</td>${list.map((s, i) => cell(s, r.key, best[i])).join("")}</tr>`;
   }).join("");
-  box.innerHTML = `<div class="cmp-card"><div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${list.map((s) =>
+  box.innerHTML = `<div class="cmp-card"><div class="cmp-wrap"><table class="cmp" style="--cols:${list.length}"><thead><tr><th></th>${list.map((s) =>
     `<th><div class="cmp-h"><button class="cmp-name" data-open="${esc(s.id)}">${esc(s.name)}</button>
       <button class="icon-btn" data-uncmp="${esc(s.id)}" aria-label="Убрать"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <span class="cmp-host">${esc(s.host || s.domain)}</span></th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div>`;
