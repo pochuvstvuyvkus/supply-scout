@@ -55,6 +55,7 @@ export function textMatch(s, q) {
     s.facts?.products?.value,
     ...(s.categories || []).map((c) => c.evidence),
     s.requested_match?.evidence,
+    s.catalog,
   ].join(" "));
   // совпадение с начала слова: «сыр» находит «сыр, сыры», но не «сырьё» и «сырники»
   const words = hay.split(/[^a-zа-я0-9]+/);
@@ -171,4 +172,15 @@ export function bestInRow(list, key) {
     }
   }
   return list.map((s) => has(s, key));
+}
+
+// Где на сайте нашёлся запрос: строка каталога, чтобы закупщик видел, что «лосось» действительно есть в ассортименте.
+export function catalogHit(s, q) {
+  const query = norm(q);
+  if (!query || !s.catalog) return null;
+  const stems = query.split(" ").map((w) => (w.length > 4 ? w.slice(0, w.length - 1) : w));
+  return s.catalog.split(" · ").find((line) => {
+    const words = norm(line).split(/[^a-zа-я0-9]+/);
+    return stems.every((st) => words.some((x) => x.startsWith(st)));
+  }) || null;
 }
