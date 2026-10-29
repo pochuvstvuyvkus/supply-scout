@@ -54,7 +54,7 @@ def test_normalization_quotes_yo_nbsp():
 
 def test_price_without_numbers_is_rejected():
     ok, reason = check_fact(fact("Цены по запросу", "Цены по запросу."), PAGES, "price_info")
-    assert ok is None and reason == "цена без цифр"
+    assert ok is None and reason == "цитата не о том поле"
 
 
 def test_empty_value_is_silently_skipped():
@@ -146,3 +146,61 @@ def test_inn_found_only_with_valid_checksum():
              {"url": "https://x.ru/c", "text": "Реквизиты: ИНН/КПП 7707083893/773601001"}]
     assert find_inn(pages)["value"] == "7707083893"
     assert find_inn(pages)["url"] == "https://x.ru/c"
+
+
+PAGES2 = [{"url": "https://y.ru/", "title": "Опт", "contacts": {"phones": ["+7 495 111-22-33"], "emails": []},
+           "text": "Мороженое пломбир. Лапша быстрого приготовления. Скидка 3 700 руб на первый заказ. "
+                   "Сборные перевозки от 3 700 руб. Ваш город Екатеринбург. Овощи оптом Екатеринбург. "
+                   "Доставляем по Москве и области. Халяль. Быстрая доставка. Холодильники в аренду с доставкой 2 дня. "
+                   "Сайт разработан студией Пиксель, ИНН 7707083893. Лосось охлажденный."}]
+
+
+def test_discount_and_freight_are_not_prices():
+    assert check_fact(fact("3 700 руб", "Скидка 3 700 руб на первый заказ"), PAGES2, "price_info")[1] == "цитата не о том поле"
+    assert check_fact(fact("от 3 700 руб", "Сборные перевозки от 3 700 руб"), PAGES2, "price_info")[1] == "цитата не о том поле"
+
+
+def test_slogans_and_rentals_are_not_delivery_terms():
+    assert check_fact(fact("Быстрая доставка", "Быстрая доставка"), PAGES2, "delivery")[1] == "цитата не о том поле"
+    assert check_fact(fact("в аренду с доставкой 2 дня", "Холодильники в аренду с доставкой 2 дня"), PAGES2, "delivery")[1] == "цитата не о том поле"
+
+
+def test_city_switcher_widget_is_not_a_city():
+    assert check_fact(fact("Екатеринбург", "Ваш город Екатеринбург"), PAGES2, "city")[1] == "цитата не о том поле"
+
+
+def test_long_quote_is_rejected():
+    long = "Лосось охлажденный. " * 20
+    pages = [dict(PAGES2[0], text=long)]
+    assert check_fact(fact("лосось", long.strip()), pages, "products")[1] == "слишком длинная цитата"
+
+
+def test_every_list_item_must_be_in_quote():
+    ok, reason = check_fact(fact("лосось, молочная продукция", "Лосось охлажденный"), PAGES2, "products")
+    assert ok is None and reason == "значение не следует из цитаты"
+
+
+def test_category_needs_its_keywords():
+    answer = model_answer(categories=[
+        {"id": "frozen", "evidence": "Мороженое пломбир", "page": 0},
+        {"id": "frozen", "evidence": "Лапша быстрого приготовления", "page": 0},
+        {"id": "asian", "evidence": "Халяль", "page": 0},
+        {"id": "fish", "evidence": "Лосось охлажденный", "page": 0}])
+    card, rejected = verify(dict(SITE, pages=PAGES2), answer)
+    assert [c["id"] for c in card["categories"]] == ["fish"]
+    assert sum(r["reason"] == "цитата не о категории" for r in rejected) >= 2
+
+
+def test_web_studio_inn_is_ignored():
+    assert find_inn(PAGES2) is None
+
+
+def test_seo_city_list_does_not_make_region_but_delivery_does():
+    card, _ = verify(dict(SITE, pages=PAGES2), model_answer(
+        categories=[{"id": "fish", "evidence": "Лосось охлажденный", "page": 0}],
+        regions_served=fact("Екатеринбург", "Овощи оптом Екатеринбург")))
+    assert "ekb" not in card["regions"]
+    card, _ = verify(dict(SITE, pages=PAGES2), model_answer(
+        categories=[{"id": "fish", "evidence": "Лосось охлажденный", "page": 0}],
+        regions_served=fact("по Москве и области", "Доставляем по Москве и области")))
+    assert "msk" in card["regions"]

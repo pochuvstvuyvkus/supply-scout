@@ -96,3 +96,30 @@ test("объяснение оценки честно говорит, чего н
   const r = reasons(C, { region: "ekb" });
   assert.ok(r.some((x) => x.ok === false && /Цен/.test(x.text)));
 });
+
+test("мин. заказ: берётся число у знака рубля, а не первое число", () => {
+  const m = (v) => moqRub({ facts: { min_order: f(v) } });
+  assert.equal(m("от 10 коробок или от 50.000 рублей"), 50000);
+  assert.equal(m("Заявка от 5000р"), 5000);
+  assert.equal(m("Минимальный первый заказ на 20 единиц продукции"), null);
+  assert.equal(m("от 1 500 р."), 1500);
+});
+
+test("поиск по началу слова: «сыр» не находит сырники и сырьё", () => {
+  const X = { ...C, facts: { products: f("сырники, сырьё для производства") } };
+  const Y = { ...C, facts: { products: f("сыр моцарелла") } };
+  assert.ok(!textMatch(X, "сыр"));
+  assert.ok(textMatch(Y, "сыр"));
+});
+
+test("CSV: телефон и текст с сайта не превращаются в формулу Excel", () => {
+  const X = { ...A, name: "=HYPERLINK(1)" };
+  const csv = toCSV([X]);
+  assert.match(csv, /'=HYPERLINK/);
+  assert.match(csv, /8 343 111-22-33/);
+});
+
+test("оценка в карточке не зависит от фильтра города: чужой город — честное «не работает»", () => {
+  assert.ok(score({ ...C, facts: { certificates: f("декларации") } }, { region: "ekb" }).value > 0);
+  assert.ok(reasons(C, { region: "ekb" }).some((r) => r.ok === false && /не работает/.test(r.text)));
+});

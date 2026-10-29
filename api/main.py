@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from collector.extract import api_key
-from collector.pipeline import OUT, WEB_OUT, run_query
+from collector.pipeline import OUT, run_query, save_db
 
 ROOT = Path(__file__).resolve().parent.parent
 app = FastAPI(title="Supply Scout")
@@ -59,32 +59,40 @@ def sse(event: str, data) -> str:
 async def collect(q: str = Query(..., min_length=2, max_length=80), city: str = "Екатеринбург"):
     async def stream():
         if _lock.locked():
-            yield sse("log", "Другой поиск ещё идёт, подождите минуту")
+            yield sse("log", "Другой поиск ещё идёт")
             yield sse("done", "busy")
             return
         async with _lock:
             queue: asyncio.Queue = asyncio.Queue()
-            task = asyncio.create_task(run_query(q, city, log=lambda m: queue.put_nowait(("log", m))))
-            while not task.done() or not queue.empty():
-                try:
-                    kind, msg = await asyncio.wait_for(queue.get(), timeout=1)
-                    yield sse(kind, msg)
-                except asyncio.TimeoutError:
-                    yield ": ping\n\n"
-            cards = task.result() if not task.exception() else []
-            if task.exception():
-                yield sse("log", f"Ошибка: {type(task.exception()).__name__}")
-            if cards:
-                db = load_db()
-                known = {s["id"]: i for i, s in enumerate(db["suppliers"])}
-                for c in cards:
-                    if c["id"] in known:
-                        db["suppliers"][known[c["id"]]] = c
-                    else:
-                        db["suppliers"].append(c)
-                    yield sse("card", c)
-                for path in (OUT, WEB_OUT):
-                    path.write_text(json.dumps(db, ensure_ascii=False, indent=1), "utf-8")
+            task = asyncio.create_task(run_query(
+                q, city, log=lambda m: queue.put_nowait(("log", m)),
+                on_card=lambda c: queue.put_nowait(("card", c))))
+            cards = []
+            try:
+                while not task.done() or not queue.empty():
+                    try:
+                        kind, msg = await asyncio.wait_for(queue.get(), timeout=1)
+                    except asyncio.TimeoutError:
+                        yield ": ping\n\n"
+                        continue
+                    if kind == "card":
+                        cards.append(msg)
+                    yield sse(kind, msg)  # карточка уходит в интерфейс сразу после проверки
+                if task.exception():
+                    yield sse("log", f"Ошибка: {type(task.exception()).__name__}")
+            finally:
+                if not task.done():
+                    task.cancel()  # клиент закрыл страницу: не тратим бюджет модели впустую
+                if cards:
+                    db = load_db()
+                    known = {s["id"]: i for i, s in enumerate(db["suppliers"])}
+                    for c in cards:
+                        if c["id"] in known:
+                            db["suppliers"][known[c["id"]]] = c
+                        else:
+                            db["suppliers"].append(c)
+                    db["stats"]["suppliers"] = len(db["suppliers"])
+                    save_db(db)
             yield sse("done", str(len(cards)))
     return StreamingResponse(stream(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

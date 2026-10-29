@@ -2,8 +2,10 @@
 
 Факт попадает в карточку, только если:
   1) цитата (evidence) дословно есть на указанной странице (после нормализации пробелов, регистра, ё/е, кавычек);
-  2) значение (value) подкреплено цитатой: все числа значения есть в цитате, и большая часть слов значения тоже;
-  3) поле имеет смысл (не пустое, не «по запросу» вместо цены и т.п.).
+  2) цитата короткая (до 250 символов) и показывается целиком;
+  3) значение подкреплено цитатой: все числа значения есть в цитате, каждый пункт списка тоже, слов — не меньше 80%;
+  4) цитата относится к полю: у цены рубли, у документов — сертификаты/декларации, у категории — её ключевые слова;
+     стоп-слова отсекают скидки, тарифы перевозки, «цены по запросу», виджет выбора города, ИНН веб-студии.
 Всё остальное отбрасывается и записывается в журнал отказов с причиной.
 """
 import re
@@ -29,7 +31,58 @@ def numbers(s: str) -> list[str]:
 
 
 EMPTY_VALUES = {"нет", "не указано", "не указан", "отсутствует", "n/a", "null", "-", "неизвестно"}
-PRICE_WITHOUT_NUMBERS = re.compile(r"по запрос|договорн|уточн|индивидуал|звоните", re.I)
+MAX_QUOTE = 250
+
+# Цитата должна относиться к полю: у каждого поля свои обязательные признаки и стоп-слова.
+FIELD_RULES = {
+    "price_info": {"need": r"\d[\d\s.,]*\s*(₽|руб|р\.|р\b|rub)|(₽|руб)\.?\s*\d",
+                   "stop": r"скидк|перевоз|грузоперевоз|по запрос|доставк|бесплатн|%"},
+    "min_order": {"need": r"\d", "stop": r"зависит|по запрос|индивидуал|бесплатн"},
+    "delivery": {"need": r"\d|бесплатн|собственн|свой транспорт|своим транспорт|рефрижератор|ежедневн|график|"
+                         r"день в день|следующий день|сутк|самовывоз|автопарк|автомобил",
+                 "stop": r"аренд"},
+    "certificates": {"need": r"сертифик|деклараци|ветеринар|вет\.|меркури|хассп|haccp|iso|гост|честный знак|"
+                             r"документ|санитар|халяль|ветсвидетельств|сгр|ту\b", "stop": None},
+    "horeca": {"need": r"ресторан|кафе|horeca|хорека|хорeca|общепит|общественн\w* питани|столов|гостиниц|отел|"
+                       r"бар|фуд-?корт|кейтеринг|предприяти\w* питани|пиццери|суши-?бар", "stop": r"консалтинг"},
+    "founded": {"need": r"\d|лет|год", "stop": None},
+    "city": {"need": None, "stop": r"ваш город|выбран|выберите город|выбрать город|на дом"},
+}
+
+CATEGORY_KEYWORDS = {
+    "rice": r"рис|круп|гречк|пшен|булгур|кускус|киноа|перлов|овсян",
+    "fish": r"рыб|морепродукт|лосос|семг|форел|кревет|кальмар|мидии|мидий|краб|икр|тунец|тунц|осьминог|гребеш|"
+            r"треск|минтай|судак|окун|угор|fish|сельд|скумбри|дорадо|сибас",
+    "meat": r"мяс|говяд|свин|баран|птиц|кур|цыпл|индей|утк|телят|фарш|колбас|сосиск|ветчин|бекон|субпродукт|"
+            r"стейк|котлет|халяль|бройлер",
+    "veg": r"овощ|фрукт|зелен|ягод|картоф|томат|огур|салат|лук|морков|капуст|перец|перц|яблок|банан|цитрус|"
+           r"грибы|гриб|авокадо|лимон",
+    "dairy": r"молоч|молок|сыр(?!ь|ни|ок)|сливк|сливочн|масло сливоч|творог|сметан|йогурт|кефир|маскарпоне|"
+             r"моцарел|пармезан|филадельфи|сгущ|dairy",
+    "asian": r"нори|суши|ролл|васаби|имбир|соев|азиат|паназиат|японск|корейск|китайск|вьетнам|тайск|лапш|удон|"
+             r"соба\b|рамен|тобико|масаго|кимчи|терияки|унаги|мирин|кунжут|рисов\w* бумаг|рисов\w* уксус|темпур|панко|"
+             r"wok|вок",
+    "grocery": r"бакале|соус|специ|припр|мук|масл|сахар|сол[ьи]|уксус|консерв|кетчуп|майонез|горчиц|круп|макарон|"
+               r"паст[аы]|чай|кофе|сироп|приправ|мед\b|орех|снек",
+    "frozen": r"заморож|замороз|полуфабрикат|шоков|глубок\w* замороз|морожен\w* (рыб|мяс|овощ|ягод)|пельмен|вареник|"
+              r"frozen|охлажд\w* и заморож",
+    "packaging": r"упаков|посуд|контейнер|ланч-?бокс|стакан|крышк|пакет|коробк|короб|лоток|лотк|салфет|пленк|"
+                 r"фольг|одноразов|тар[аы]|бумаг|картон|приборы",
+    "bakery": r"хлеб|выпеч|булк|булоч|батон|багет|лаваш|тесто|кондитер|пекар|круассан|бриошь|чиабат|бейгл|"
+              r"тортиль|пирог|пирож|слойк|хлебобулоч",
+}
+
+
+def field_problem(field: str, value: str, evidence: str) -> str | None:
+    rule = FIELD_RULES.get(field)
+    if not rule:
+        return None
+    t = norm(value + " " + evidence)
+    if rule["stop"] and re.search(rule["stop"], t):
+        return "цитата не о том поле"
+    if rule["need"] and not re.search(rule["need"], norm(value) if field == "price_info" else t):
+        return "цитата не о том поле"
+    return None
 
 
 def page_text(p: dict) -> str:
@@ -57,23 +110,27 @@ def check_fact(fact: dict | None, pages: list[dict], field: str) -> tuple[dict |
         return None, None
     if len(evidence) < 4:
         return None, "нет цитаты"
+    if len(evidence) > MAX_QUOTE:
+        return None, "слишком длинная цитата"
     url = find_quote(evidence, fact.get("page"), pages)
     if not url:
         return None, "цитаты нет на сайте"
     ev_nums = set(numbers(evidence))
     if any(n not in ev_nums for n in numbers(value)):
         return None, "в значении числа, которых нет в цитате"
-    v_words = stem_words(value)
-    if v_words:
-        ev_stems = set(stem_words(evidence))
-        hit = sum(1 for w in v_words if w in ev_stems)
-        if hit / len(v_words) < 0.6:
+    ev_stems = set(stem_words(evidence))
+    # каждый пункт списка («лосось, форель, икра») должен быть в цитате; в целом — не меньше 80% слов
+    for item in re.split(r"[,;]| и ", value):
+        words = stem_words(item)
+        if words and not any(w in ev_stems for w in words):
             return None, "значение не следует из цитаты"
-    if field == "price_info" and not numbers(value):
-        return None, "цена без цифр"
-    if field == "min_order" and not numbers(value) and PRICE_WITHOUT_NUMBERS.search(value):
-        return None, "минимальный заказ без условий"
-    return {"value": value[:220], "evidence": evidence[:240], "url": url}, None
+    v_words = stem_words(value)
+    if v_words and sum(1 for w in v_words if w in ev_stems) / len(v_words) < 0.8:
+        return None, "значение не следует из цитаты"
+    problem = field_problem(field, value, evidence)
+    if problem:
+        return None, problem
+    return {"value": value, "evidence": evidence, "url": url}, None
 
 
 INN_RE = re.compile(r"ИНН[\s:№/КПП]*?(\d{10}|\d{12})(?!\d)", re.I)
@@ -92,13 +149,22 @@ def inn_valid(inn: str) -> bool:
     return False
 
 
+AGENCY_CONTEXT = re.compile(r"разработ|digital|сайт|агентств|студи|бренд упакован|продвижен|дизайн|хостинг", re.I)
+
+
 def find_inn(pages: list[dict]) -> dict | None:
+    found = []
     for p in pages:
         for m in INN_RE.finditer(p["text"]):
-            if inn_valid(m.group(1)):
-                start = max(0, m.start() - 40)
-                return {"value": m.group(1), "evidence": p["text"][start:m.end()].strip(), "url": p["url"]}
-    return None
+            if not inn_valid(m.group(1)):
+                continue
+            before = p["text"][max(0, m.start() - 80):m.start()]
+            if AGENCY_CONTEXT.search(before):
+                continue  # ИНН подрядчика в подвале сайта, а не поставщика
+            rank = 0 if re.search(r"реквизит|контакт|о компании", p["url"] + " " + p.get("title", ""), re.I) else 1
+            found.append((rank, {"value": m.group(1), "evidence": p["text"][max(0, m.start() - 40):m.end()].strip(),
+                                 "url": p["url"]}))
+    return sorted(found, key=lambda x: x[0])[0][1] if found else None
 
 
 GENERIC_TITLE = re.compile(r"^(главная|главная страница|home|официальный сайт|о компании)$", re.I)
@@ -154,11 +220,18 @@ def verify(site: dict, extracted: dict) -> tuple[dict | None, list[dict]]:
     for c in extracted.get("categories") or []:
         if c.get("id") not in CATEGORY_IDS or c["id"] in [x["id"] for x in cats]:
             continue
-        url = find_quote(c.get("evidence") or "", c.get("page"), pages)
+        ev = (c.get("evidence") or "").strip()
+        if len(ev) > MAX_QUOTE:
+            rejected.append({"field": f"category:{c['id']}", "reason": "слишком длинная цитата"})
+            continue
+        if not re.search(CATEGORY_KEYWORDS[c["id"]], norm(ev)):
+            rejected.append({"field": f"category:{c['id']}", "reason": "цитата не о категории"})
+            continue
+        url = find_quote(ev, c.get("page"), pages)
         if url:
-            cats.append({"id": c["id"], "evidence": c["evidence"].strip()[:240], "url": url})
+            cats.append({"id": c["id"], "evidence": ev, "url": url})
         else:
-            rejected.append({"field": f"category:{c.get('id')}", "reason": "цитаты нет на сайте"})
+            rejected.append({"field": f"category:{c['id']}", "reason": "цитаты нет на сайте"})
 
     if not cats:
         return None, rejected + [{"field": "categories", "reason": "нет подтверждённых категорий"}]
@@ -175,8 +248,16 @@ def verify(site: dict, extracted: dict) -> tuple[dict | None, list[dict]]:
 
     raw_name = facts.get("company_name", {}).get("value")
     name = clean_name(raw_name or site.get("title") or site["domain"], not raw_name, site["domain"])
-    regions_text = " ".join(facts.get(f, {}).get("value", "") for f in ("city", "address", "regions_served"))
-    regions = set(region_ids(regions_text))
+    regions = set()
+    for f in ("city", "address"):
+        if f in facts:
+            regions |= set(region_ids(facts[f]["evidence"]))
+    if "regions_served" in facts:
+        ev = facts["regions_served"]["evidence"]
+        ids = set(region_ids(ev))
+        if not re.search(r"достав|постав|работаем|привоз|отгруж|отправ|по всей|по росси", norm(ev)):
+            ids.discard("ekb"); ids.discard("msk")  # «Овощи оптом Екатеринбург» в SEO-списке — не поставка
+        regions |= ids
     for ph in contacts["phones"]:
         code = ph[3:6]
         if code == "343":

@@ -24,6 +24,17 @@ OUT = ROOT / "data" / "suppliers.json"
 WEB_OUT = ROOT / "web" / "data" / "suppliers.json"
 
 
+def save_db(db: dict) -> None:
+    """Атомарная запись: читатели никогда не увидят наполовину записанный JSON."""
+    import os
+    body = json.dumps(db, ensure_ascii=False, indent=1)
+    for path in (OUT, WEB_OUT):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(body, "utf-8")
+        os.replace(tmp, path)
+
+
 async def discover(client, queries: list[str], limit: int, log) -> list[dict]:
     found, seen = [], set()
     for q in queries:
@@ -48,13 +59,16 @@ def urlhost(url: str) -> str:
 
 async def process_site(client, cand: dict, requested: str, sem, stats: Counter, rejects: Counter):
     async with sem:
-        site = await fetch_site(client, cand["url"])
+        try:  # общий таймаут: сайт, который держит соединение, не должен вешать весь сбор
+            site = await asyncio.wait_for(fetch_site(client, cand["url"]), timeout=90)
+        except asyncio.TimeoutError:
+            site = None
         if not site:
             stats["сайт не открылся"] += 1
             return None
         try:
-            ex = await extract(client, site, requested)
-        except LLMUnavailable:
+            ex = await asyncio.wait_for(extract(client, site, requested), timeout=240)
+        except (LLMUnavailable, asyncio.TimeoutError):
             stats["модель недоступна"] += 1
             return None
         stats["cost"] += ex.get("cost") or 0
@@ -85,7 +99,11 @@ async def run_full(log=print) -> dict:
         async def disc(cat, reg):
             async with dsem:
                 queries = [f"{q} {reg['name']}" for q in cat["queries"]]
-                return cat, await discover(client, queries, CANDIDATES_PER_CATEGORY_REGION, log)
+                try:
+                    return cat, await asyncio.wait_for(
+                        discover(client, queries, CANDIDATES_PER_CATEGORY_REGION, log), timeout=300)
+                except asyncio.TimeoutError:
+                    return cat, []
         for cat, found in await asyncio.gather(*[disc(c, r) for c in CATEGORIES for r in REGIONS]):
             for c in found:
                 by_domain.setdefault(c["domain"], c)
@@ -108,14 +126,12 @@ async def run_full(log=print) -> dict:
                   "llm_cost_usd": round(stats["cost"], 3), "seconds": round(time.time() - t0)},
         "suppliers": cards,
     }
-    for path in (OUT, WEB_OUT):
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(result, ensure_ascii=False, indent=1), "utf-8")
+    save_db(result)
     log(json.dumps(result["stats"], ensure_ascii=False))
     return result
 
 
-async def run_query(query: str, city: str, limit: int = 8, log=print, client=None) -> list[dict]:
+async def run_query(query: str, city: str, limit: int = 8, log=print, client=None, on_card=None) -> list[dict]:
     """Живой поиск по произвольному запросу: то же самое, но для одного запроса."""
     own = client is None
     client = client or httpx.AsyncClient(limits=httpx.Limits(max_connections=20))
@@ -129,7 +145,10 @@ async def run_query(query: str, city: str, limit: int = 8, log=print, client=Non
             card = await coro
             if card and card.get("requested_match"):
                 cards.append(card)
-                log(f"Подтверждён: {card['name']}")
+                if on_card:
+                    on_card(card)
+                else:
+                    log(f"Подтверждён: {card['name']}")
         return cards
     finally:
         if own:

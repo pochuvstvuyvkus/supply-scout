@@ -1,43 +1,23 @@
 {
  "summary": {
-  "checked_at": "2026-10-29T13:53",
-  "suppliers": 115,
-  "sites_reachable": 114,
-  "checks": 1341,
-  "passed": 1335,
-  "pass_rate": 0.9955,
+  "checked_at": "2026-10-29T14:55",
+  "suppliers": 143,
+  "sites_reachable": 143,
+  "checks": 1617,
+  "passed": 1616,
+  "pass_rate": 0.9994,
   "by_status": {
-   "ok": 1335,
-   "страница недоступна": 6
+   "ok": 1616,
+   "цитаты нет": 1
   }
  },
  "failed": [
   {
-   "id": "dikoekachestvo.com",
+   "id": "shefcompany.ru",
    "failed": [
     {
-     "key": "company_name",
-     "status": "страница недоступна"
-    },
-    {
-     "key": "city",
-     "status": "страница недоступна"
-    },
-    {
-     "key": "address",
-     "status": "страница недоступна"
-    },
-    {
-     "key": "min_order",
-     "status": "страница недоступна"
-    },
-    {
-     "key": "category:fish",
-     "status": "страница недоступна"
-    },
-    {
-     "key": "category:grocery",
-     "status": "страница недоступна"
+     "key": "price_info",
+     "status": "цитаты нет"
     }
    ]
   }
