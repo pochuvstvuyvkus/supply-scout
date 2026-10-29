@@ -345,6 +345,8 @@ body.locked { overflow: hidden; }
   .tab .t-short .ico { width: 20px; height: 20px; }
 }
 @media (max-width: 360px) {
+  .tab { padding: 10px 2px; font-size: 12.5px; gap: 4px; }
+  .tab .pill { min-width: 18px; height: 18px; font-size: 11px; padding: 0 5px; }
   .facts { grid-template-columns: minmax(0, 1fr); }
   .tab { padding: 8px 7px; }
 }
