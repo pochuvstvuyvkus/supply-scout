@@ -1,6 +1,6 @@
 import {
-  FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
-} from "./core.js?v=15";
+  FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit, moqRub,
+} from "./core.js?v=18";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -355,33 +355,49 @@ function renderCompare() {
   const list = S.compare.map(byId).filter(Boolean);
   const box = $("#cmpPage");
   if (!list.length) {
-    box.innerHTML = `<div class="empty"><b>Пусто</b></div>`;
+    box.innerHTML = `<div class="empty cmp-empty"><b>Пусто</b><button class="btn primary" data-view="search">К поставщикам</button></div>`;
     return;
   }
-  const rowsDef = [
-    { key: "score", label: "Оценка" },
-    { key: "regions", label: "Города" },
+  const n = list.length;
+  const sections = [
     { key: "cats", label: "Категории" },
-    ...FACTS.map((f) => ({ key: f.key, label: f.label })),
-    { key: "contacts", label: "Контакты" },
+    { key: "min_order", label: "Минимальный заказ" },
+    { key: "price_info", label: "Цена" },
+    { key: "delivery", label: "Доставка" },
+    { key: "certificates", label: "Документы" },
+    { key: "regions_served", label: "Регион работы" },
+    { key: "horeca", label: "Работа с HoReCa" },
+    { key: "founded", label: "На рынке" },
   ];
-  const cell = (s, key, best) => {
-    if (key === "score") return `<td><span class="score-pill">${score(s, S.f).value}</span></td>`;
-    if (key === "regions") return `<td>${s.regions.map(regName).join(", ") || "—"}</td>`;
-    if (key === "cats") return `<td>${s.categories.map((c) => esc(catName(c.id))).join("<br>")}</td>`;
-    if (key === "contacts") return `<td>${s.contacts.phones.map((p) => `<a href="tel:${p.replace(/[^\d+]/g, "")}">${esc(p)}</a>`).join("<br>")}
-      ${s.contacts.emails.map((e) => `<br><a href="mailto:${esc(e)}">${esc(e)}</a>`).join("")}</td>`;
-    const v = s.facts?.[key]?.value;
-    return v ? `<td class="${best ? "best" : ""}"><div class="clamp">${esc(v)}</div></td>` : `<td class="no">нет данных</td>`;
-  };
-  const body = rowsDef.map((r) => {
-    const best = ["score", "regions", "contacts", "cats"].includes(r.key) || list.length < 2 ? list.map(() => false) : bestInRow(list, r.key);
-    return `<tr><td>${r.label}</td>${list.map((s, i) => cell(s, r.key, best[i])).join("")}</tr>`;
+  const head = list.map((s) => {
+    const sc = score(s, S.f).value;
+    return `<div class="cc-head">
+      <div class="cc-top">${ring(sc)}<button class="icon-btn" data-uncmp="${esc(s.id)}" aria-label="Убрать"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <button class="cc-name" data-open="${esc(s.id)}">${esc(s.name)}</button>
+      <div class="cc-host">${esc(s.host || s.domain)}</div>
+      <div class="cc-tags">${s.regions.map((r) => `<span class="tag reg">${regName(r)}</span>`).join("") || `<span class="tag">Город не указан</span>`}</div>
+    </div>`;
   }).join("");
-  box.innerHTML = `<div class="cmp-card"><div class="cmp-wrap"><table class="cmp" style="--cols:${list.length}"><thead><tr><th></th>${list.map((s) =>
-    `<th><div class="cmp-h"><button class="cmp-name" data-open="${esc(s.id)}">${esc(s.name)}</button>
-      <button class="icon-btn" data-uncmp="${esc(s.id)}" aria-label="Убрать"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-      <span class="cmp-host">${esc(s.host || s.domain)}</span></th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+  const rows = sections.map((sec) => {
+    const best = sec.key === "min_order" && n > 1 ? bestInRow(list, "min_order") : list.map(() => false);
+    const anyMoq = sec.key === "min_order" && list.some((x) => moqRub(x) !== null);
+    const cells = list.map((s, k) => {
+      if (sec.key === "cats") return `<div class="cc-cell">${s.categories.map((c) => `<span class="cc-chip">${esc(catName(c.id))}</span>`).join("")}</div>`;
+      const v = s.facts?.[sec.key]?.value;
+      if (!v) return `<div class="cc-cell none">нет на сайте</div>`;
+      return `<div class="cc-cell"><span class="cc-val">${esc(v)}</span>${best[k] && anyMoq ? `<span class="cc-best">ниже всех</span>` : ""}</div>`;
+    }).join("");
+    return `<div class="cc-label"><span>${sec.label}</span></div>${cells}`;
+  }).join("");
+  const foot = list.map((s) => {
+    const ph = s.contacts.phones[0], em = s.contacts.emails[0];
+    return `<div class="cc-foot">
+      ${ph ? `<a class="btn primary small" href="tel:${ph.replace(/[^\d+]/g, "")}">${ICON.phone}${esc(ph)}</a>` : ""}
+      ${em ? `<a class="btn ghost small" href="mailto:${esc(em)}">${ICON.mail}Написать</a>` : ""}
+      <button class="btn ghost small" data-open="${esc(s.id)}">Подробнее</button>
+    </div>`;
+  }).join("");
+  box.innerHTML = `<div class="cc-scroll"><div class="cc" style="--n:${n}">${head}${rows}<div class="cc-label"><span>Контакты</span></div>${foot}</div></div>`;
 }
 
 /* ---------- мой список ---------- */
