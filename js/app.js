@@ -1,6 +1,6 @@
 import {
-  FACTS, PRIORITIES, rank, reasons, questions, rfqText, toCSV, bestInRow, has, completeness,
-} from "./core.js";
+  FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness,
+} from "./core.js?v=2";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -164,10 +164,9 @@ function renderResults() {
   const pages = Math.max(1, Math.ceil(list.length / S.pageSize));
   S.page = Math.min(S.page, pages);
   const slice = list.slice((S.page - 1) * S.pageSize, S.page * S.pageSize);
-  const where = S.f.region === "all" ? "" : ` · ${regName(S.f.region)} и по России`;
-  $("#resCount").innerHTML = `${list.length} ${plural(list.length, "поставщик", "поставщика", "поставщиков")}<span class="muted">${where}</span>`;
+  $("#resCount").textContent = `${list.length} ${plural(list.length, "поставщик", "поставщика", "поставщиков")}`;
   $("#cards").innerHTML = slice.length ? slice.map(card).join("") :
-    `<div class="empty"><b>Ничего не нашлось</b><span class="muted">${S.api ? "Попробуйте найти новых в интернете" : "Измените запрос или фильтры"}</span></div>`;
+    `<div class="empty"><b>Ничего не нашлось</b></div>`;
   renderPager(list.length, pages);
   renderLive();
 }
@@ -186,7 +185,7 @@ const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 &
 function openDrawer(id) {
   const s = byId(id); if (!s) return;
   const u = S.user[id] || {};
-  const sc = rank([s], { ...S.f, q: "", category: "all", need: [] })[0]?.sc || { value: 0 };
+  const sc = score(s, S.f);
   const why = reasons(s, S.f);
   const qs = questions(s);
   const factRows = [{ key: "products", label: "Товары" }, { key: "city", label: "Город" }, { key: "address", label: "Адрес" },
@@ -231,7 +230,7 @@ function openDrawer(id) {
           <button class="btn primary small" id="copyRfq">Скопировать</button>
           ${s.contacts.emails[0] ? `<a class="btn ghost small" id="mailRfq" href="#">Открыть в почте</a>` : ""}
         </div></div>
-      <div class="d-sec"><h3>Заметка</h3><textarea class="note" id="note" placeholder="Цена за кг, с кем говорили, договорённости">${esc(u.note || "")}</textarea></div>
+      <div class="d-sec"><h3>Заметка</h3><textarea class="note" id="note">${esc(u.note || "")}</textarea></div>
     </div>`;
   d.dataset.id = id;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
@@ -272,7 +271,7 @@ function openCompare() {
     { key: "contacts", label: "Контакты" },
   ];
   const cell = (s, key, best) => {
-    if (key === "score") return `<td><b>${rank([s], { ...S.f, q: "", category: "all", need: [] })[0]?.sc.value ?? "-"}</b></td>`;
+    if (key === "score") return `<td><b>${score(s, S.f).value}</b></td>`;
     if (key === "regions") return `<td>${s.regions.map(regName).join(", ") || "—"}</td>`;
     if (key === "contacts") return `<td>${[...s.contacts.phones, ...s.contacts.emails].map(esc).join("<br>")}</td>`;
     const v = s.facts?.[key]?.value;
@@ -292,7 +291,7 @@ function openCompare() {
 function renderBoard() {
   const saved = Object.entries(S.user).filter(([, u]) => u.saved).map(([id, u]) => ({ s: byId(id), u })).filter((x) => x.s);
   if (!saved.length) {
-    $("#board").innerHTML = `<div class="empty" style="grid-column:1/-1"><b>Список пуст</b><span class="muted">Добавляйте поставщиков кнопкой «В список»</span></div>`;
+    $("#board").innerHTML = `<div class="empty" style="grid-column:1/-1"><b>Список пуст</b></div>`;
     return;
   }
   $("#board").innerHTML = STATUSES.map((st) => {
@@ -348,7 +347,7 @@ function renderLive() {
   if (!S.api) { box.hidden = true; return; }
   box.hidden = false;
   const q = S.f.q.trim();
-  $("#liveHint").textContent = q ? `«${q}», ${S.f.region === "msk" ? "Москва" : "Екатеринбург"}` : "введите товар в поиске";
+  $("#liveHint").textContent = q ? `«${q}» · ${S.f.region === "msk" ? "Москва" : "Екатеринбург"}` : "";
   $("#liveBtn").disabled = !q || S.liveRunning;
 }
 
@@ -369,7 +368,8 @@ function runLive() {
     renderCats(); renderResults();
   });
   const end = (msg) => { es.close(); S.liveRunning = false; renderLive(); toast(msg); };
-  es.addEventListener("done", () => end(added ? `Добавлено: ${added}` : "Новых поставщиков не нашлось"));
+  es.addEventListener("done", (e) => end(e.data === "busy" ? "Идёт другой поиск, попробуйте через минуту"
+    : added ? `Добавлено: ${added}` : "Новых поставщиков не нашлось"));
   es.onerror = () => end("Поиск прерван");
 }
 

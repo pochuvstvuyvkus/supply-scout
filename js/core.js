@@ -30,13 +30,12 @@ export function completeness(s) {
   return keys.filter((k) => has(s, k)).length / keys.length;
 }
 
-// Рубли из текста минимального заказа: «от 11 000 ₽», «5000 руб.». Килограммы и штуки не сравниваем.
+// Рубли из текста минимального заказа: число рядом со знаком рубля. «от 10 коробок или от 50.000 рублей» → 50000.
 export function moqRub(s) {
-  const v = has(s, "min_order") ? s.facts.min_order.value : "";
-  if (!/₽|руб|р\.|rub/i.test(v)) return null;
-  const m = v.replace(/ /g, " ").match(/(\d[\d\s]*(?:[.,]\d+)?)\s*(тыс)?/i);
+  const v = (has(s, "min_order") ? s.facts.min_order.value : "").replace(/\u00a0/g, " ");
+  const m = v.match(/(\d{1,3}(?:[ .]\d{3})+|\d+)(?:[.,]\d+)?\s*(тыс\.?\s*)?(?:₽|руб|р\.|р(?![а-яa-z])|rub)/i);
   if (!m) return null;
-  let n = parseFloat(m[1].replace(/\s/g, "").replace(",", "."));
+  let n = parseInt(m[1].replace(/[ .]/g, ""), 10);
   if (m[2]) n *= 1000;
   return Number.isFinite(n) ? n : null;
 }
@@ -57,7 +56,12 @@ export function textMatch(s, q) {
     ...(s.categories || []).map((c) => c.evidence),
     s.requested_match?.evidence,
   ].join(" "));
-  return query.split(" ").every((w) => hay.includes(w.length > 4 ? w.slice(0, w.length - 1) : w));
+  // совпадение с начала слова: «сыр» находит «сыр, сыры», но не «сырьё» и «сырники»
+  const words = hay.split(/[^a-zа-я0-9]+/);
+  return query.split(" ").every((w) => {
+    const stem = w.length > 4 ? w.slice(0, w.length - 1) : w;
+    return words.some((x) => x.startsWith(stem) && (w.length > 4 || x.length <= w.length + 1));
+  });
 }
 
 export function filterSuppliers(list, f) {
@@ -100,7 +104,8 @@ export function reasons(s, f = {}) {
   const rf = regionFit(s, f.region);
   if (f.region && f.region !== "all") {
     out.push(rf === 1 ? { ok: true, text: "Работает в выбранном городе" }
-      : { ok: null, text: "Поставляет по России, в городе склада нет" });
+      : rf > 0 ? { ok: null, text: "Поставляет по России" }
+        : { ok: false, text: "В выбранном городе не работает" });
   }
   out.push(has(s, "certificates") ? { ok: true, text: "Указаны документы на продукцию" } : { ok: false, text: "Про документы на сайте нет" });
   out.push(has(s, "price_info") ? { ok: true, text: "Есть цены" } : { ok: false, text: "Цен на сайте нет" });
@@ -135,7 +140,8 @@ export function rfqText(s, opts = {}) {
 }
 
 const csvCell = (v) => {
-  const s = String(v ?? "");
+  let s = String(v ?? "");
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // Excel не должен считать текст формулой
   return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
@@ -146,7 +152,7 @@ export function toCSV(rows, categoryNames = {}, state = {}) {
     s.name, s.inn?.value || "", s.site,
     (s.categories || []).map((c) => categoryNames[c.id] || c.id).join(", "),
     (s.regions || []).join(", "),
-    (s.contacts?.phones || []).join(", "),
+    (s.contacts?.phones || []).map((p) => p.replace(/^\+7 /, "8 ")).join(", "),
     (s.contacts?.emails || []).join(", "),
     s.facts?.min_order?.value, s.facts?.price_info?.value, s.facts?.certificates?.value, s.facts?.delivery?.value,
     state[s.id]?.status || "", state[s.id]?.note || "", s.checked_at,
