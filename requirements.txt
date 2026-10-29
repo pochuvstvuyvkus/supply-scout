@@ -1,0 +1,7 @@
+httpx
+beautifulsoup4
+lxml
+pydantic
+fastapi
+uvicorn
+pytest

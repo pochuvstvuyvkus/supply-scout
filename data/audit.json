@@ -1,0 +1,45 @@
+{
+ "summary": {
+  "checked_at": "2026-10-29T13:53",
+  "suppliers": 115,
+  "sites_reachable": 114,
+  "checks": 1341,
+  "passed": 1335,
+  "pass_rate": 0.9955,
+  "by_status": {
+   "ok": 1335,
+   "страница недоступна": 6
+  }
+ },
+ "failed": [
+  {
+   "id": "dikoekachestvo.com",
+   "failed": [
+    {
+     "key": "company_name",
+     "status": "страница недоступна"
+    },
+    {
+     "key": "city",
+     "status": "страница недоступна"
+    },
+    {
+     "key": "address",
+     "status": "страница недоступна"
+    },
+    {
+     "key": "min_order",
+     "status": "страница недоступна"
+    },
+    {
+     "key": "category:fish",
+     "status": "страница недоступна"
+    },
+    {
+     "key": "category:grocery",
+     "status": "страница недоступна"
+    }
+   ]
+  }
+ ]
+}

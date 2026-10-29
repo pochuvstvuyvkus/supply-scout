@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Supply Scout · поставщики для общепита</title>
+<meta name="description" content="Поиск и сравнение поставщиков продуктов и упаковки для ресторанов: каждый факт с цитатой и ссылкой на сайт поставщика.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css?v=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%231a7f55'/%3E%3Ccircle cx='14' cy='14' r='6.5' fill='none' stroke='white' stroke-width='3'/%3E%3Cpath d='M19 19l6 6' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<header class="top">
+  <div class="top-in">
+    <a class="brand" href="#search" data-view="search">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><circle cx="14" cy="14" r="6.5" fill="none" stroke="currentColor" stroke-width="3"/><path d="M19 19l6 6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
+      <span class="brand-name">Supply Scout</span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="search" role="tab">Поиск</button>
+      <button class="tab" data-view="list" role="tab">Мой список <span class="pill" id="listCount">0</span></button>
+      <button class="tab" data-view="how" role="tab">Как это работает</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ПОИСК -->
+  <section class="view" id="view-search">
+    <div class="searchbar">
+      <div class="search-field">
+        <svg class="ico" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+        <input id="q" autocomplete="off" spellcheck="false" placeholder="Товар или поставщик: нори, лосось, упаковка для роллов">
+        <button class="icon-btn clear" id="qClear" aria-label="Очистить" hidden><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="seg" id="regionSeg"></div>
+      <button class="btn ghost only-mobile" id="openFilters"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Фильтры <span class="pill" id="filterCount" hidden>0</span></button>
+    </div>
+
+    <div class="layout">
+      <aside class="filters" id="filters">
+        <div class="sheet-head only-mobile"><b>Фильтры</b><button class="icon-btn" data-close-sheet aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+        <div class="fgroup">
+          <h3>Категория</h3>
+          <div class="catlist" id="catList"></div>
+        </div>
+        <div class="fgroup">
+          <h3>Обязательно на сайте</h3>
+          <div class="chips" id="needChips"></div>
+        </div>
+        <div class="fgroup">
+          <h3>Что важнее</h3>
+          <div class="chips" id="prioChips"></div>
+        </div>
+        <button class="btn ghost wide" id="resetFilters">Сбросить</button>
+        <button class="btn primary wide only-mobile" data-close-sheet id="applyFilters">Показать</button>
+      </aside>
+
+      <div class="results">
+        <div class="live" id="live" hidden>
+          <div class="live-row">
+            <div>
+              <b>Найти новых в интернете</b>
+              <span class="muted" id="liveHint"></span>
+            </div>
+            <button class="btn primary" id="liveBtn">Искать</button>
+          </div>
+          <ol class="live-log" id="liveLog" hidden></ol>
+        </div>
+        <div class="res-head">
+          <div class="res-count" id="resCount"></div>
+          <div class="dd" id="sortDd"></div>
+        </div>
+        <div class="cards" id="cards"></div>
+        <div class="pager" id="pager"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- МОЙ СПИСОК -->
+  <section class="view" id="view-list" hidden>
+    <div class="list-head">
+      <h1>Мой список</h1>
+      <div class="list-actions">
+        <button class="btn ghost" id="exportCsv"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>
+      </div>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+  <!-- КАК ЭТО РАБОТАЕТ -->
+  <section class="view how" id="view-how" hidden></section>
+</main>
+
+<!-- сравнение -->
+<div class="tray" id="tray" hidden>
+  <div class="tray-in">
+    <div class="tray-items" id="trayItems"></div>
+    <button class="btn ghost" id="trayClear">Очистить</button>
+    <button class="btn primary" id="trayGo">Сравнить</button>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop" hidden></div>
+<aside class="drawer" id="drawer" aria-hidden="true"></aside>
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="js/app.js?v=1"></script>
+</body>
+</html>
