@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
-} from "./core.js?v=14";
+} from "./core.js?v=15";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -269,12 +269,27 @@ function openDrawer(id, tab = "overview") {
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
   $("#backdrop").hidden = false;
   document.body.classList.add("locked");
+  fitDrawer();
   $("#openRfq").onclick = () => openRfq(s, city);
   $("#note").oninput = (e) => {
     S.user[id] = { ...(S.user[id] || {}), note: e.target.value, saved: true, status: (S.user[id] || {}).status || "Новый" };
     saveUser();
   };
 }
+
+// Высота окна = высота «Обзора» этого поставщика: без пустого места и без прыжков при смене вкладок.
+function fitDrawer() {
+  const d = $("#drawer");
+  d.style.height = "";
+  if (innerWidth <= 600) return;
+  const p = d.querySelector('[data-pane="overview"]');
+  const wasHidden = p.hidden;
+  p.hidden = false; p.style.flex = "none"; p.style.height = "auto";
+  const h = d.querySelector(".d-top").offsetHeight + p.offsetHeight + 2;
+  p.style.flex = ""; p.style.height = ""; p.hidden = wasHidden;
+  d.style.height = Math.min(h, innerHeight - 32) + "px";
+}
+window.addEventListener("resize", () => { if ($("#drawer").classList.contains("open")) fitDrawer(); });
 
 function setDrawerTab(tab) {
   const d = $("#drawer");
