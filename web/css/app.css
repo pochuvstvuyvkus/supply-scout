@@ -421,4 +421,4 @@ body.locked { overflow: hidden; }
   .cc-scroll { overflow-x: auto; margin: 0 -16px; padding: 0 16px 8px; }
   .cc-head { position: static; }
 }
-@media (max-width: 600px) { .cc { grid-template-columns: repeat(var(--n), minmax(220px, 1fr)); } .cc-scroll { margin: 0 -12px; padding: 0 12px 8px; } }
+@media (max-width: 600px) { .cc-head .ring { display: block; } .cc { grid-template-columns: repeat(var(--n), minmax(220px, 1fr)); } .cc-scroll { margin: 0 -12px; padding: 0 12px 8px; } }
