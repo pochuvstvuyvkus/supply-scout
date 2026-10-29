@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  filterSuppliers, score, rank, moqRub, questions, rfqText, toCSV, bestInRow, regionFit, textMatch, reasons,
+  filterSuppliers, score, rank, moqRub, questions, rfqText, toCSV, bestInRow, regionFit, textMatch, reasons, catalogHit,
 } from "../web/js/core.js";
 
 const f = (value) => ({ value, evidence: value, url: "https://x.ru/" });
@@ -122,4 +122,11 @@ test("CSV: телефон и текст с сайта не превращают�
 test("оценка в карточке не зависит от фильтра города: чужой город — честное «не работает»", () => {
   assert.ok(score({ ...C, facts: { certificates: f("декларации") } }, { region: "ekb" }).value > 0);
   assert.ok(reasons(C, { region: "ekb" }).some((r) => r.ok === false && /не работает/.test(r.text)));
+});
+
+test("поиск по ассортименту сайта показывает строку, где нашёлся товар", () => {
+  const X = { ...C, catalog: "Говядина · Лосось (Семга) охлаждённый · Креветки" };
+  assert.ok(textMatch(X, "лосось"));
+  assert.equal(catalogHit(X, "лосось"), "Лосось (Семга) охлаждённый");
+  assert.equal(catalogHit(X, "нори"), null);
 });

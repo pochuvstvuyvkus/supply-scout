@@ -184,6 +184,21 @@ def clean_name(name: str, from_title: bool, domain: str) -> str:
     return n[:60]
 
 
+def catalog_lines(pages: list[dict], limit: int = 5000) -> str:
+    """Короткие строки со страниц (пункты каталога, меню, списки товаров) для поиска по ассортименту."""
+    seen, out, total = set(), [], 0
+    for p in pages:
+        for line in p["text"].split("\n"):
+            t = re.sub(r"\s+", " ", line).strip()
+            if 3 <= len(t) <= 80 and re.search(r"[а-яА-Я]{3}", t) and t.lower() not in seen:
+                seen.add(t.lower())
+                out.append(t)
+                total += len(t) + 3
+                if total > limit:
+                    return " · ".join(out)
+    return " · ".join(out)
+
+
 def readable_host(domain: str) -> str:
     try:
         return domain.encode().decode("idna")
@@ -276,4 +291,5 @@ def verify(site: dict, extracted: dict) -> tuple[dict | None, list[dict]]:
         "inn": find_inn(pages),
         "facts": facts,
         "pages_checked": [p["url"] for p in pages],
+        "catalog": catalog_lines(pages),
     }, rejected

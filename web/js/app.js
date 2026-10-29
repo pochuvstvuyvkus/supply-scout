@@ -1,6 +1,6 @@
 import {
-  FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness,
-} from "./core.js?v=3";
+  FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
+} from "./core.js?v=5";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -126,6 +126,7 @@ function card({ s, sc }) {
   const phone = s.contacts.phones[0];
   const email = s.contacts.emails[0];
   const products = s.facts?.products?.value || s.requested_match?.evidence || "";
+  const hit = catalogHit(s, S.f.q);
   return `<article class="card" data-id="${esc(s.id)}">
     ${ring(sc.value)}
     <div>
@@ -143,6 +144,7 @@ function card({ s, sc }) {
         ${u.saved ? `<span class="status-badge">${esc(u.status || "Новый")}</span>` : ""}
       </div>
       ${products ? `<p class="products">${esc(products)}</p>` : ""}
+      ${hit ? `<p class="hit"><a href="${esc(s.site)}" target="_blank" rel="noopener">На сайте</a>«${esc(hit)}»</p>` : ""}
       <div class="facts">
         ${factCell(s, "min_order", "Мин. заказ")}${factCell(s, "price_info", "Цена")}
         ${factCell(s, "delivery", "Доставка")}${factCell(s, "certificates", "Документы")}
