@@ -287,7 +287,7 @@ body.locked { overflow: hidden; }
 .rej div { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); gap: 10px; }
 .rej div:last-child { border-bottom: 0; }
 
-.toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 700; z-index: 90; max-width: calc(100vw - 32px); text-align: center; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-weight: 700; z-index: 90; max-width: calc(100vw - 32px); text-align: center; }
 
 .only-mobile { display: none !important; }
 .t-short { display: none; }
