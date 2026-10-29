@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
-} from "./core.js?v=5";
+} from "./core.js?v=6";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -211,7 +211,7 @@ function openDrawer(id) {
         ${s.regions.map((r) => `<span class="tag reg">${regName(r)}</span>`).join("")}<span>проверено ${esc(s.checked_at)}</span></div></div>
       <button class="icon-btn" data-close aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
-    <div class="d-body">
+    <div class="d-body"><div class="d-col">
       <div class="d-sec"><h3>Статус</h3><div class="statuses">${STATUSES.map((st) =>
         `<button class="chip ${u.saved && (u.status || "Новый") === st ? "active" : ""}" data-status="${st}">${st}</button>`).join("")}</div></div>
       <div class="d-sec"><h3>Контакты</h3><div class="contacts-list">
@@ -225,8 +225,10 @@ function openDrawer(id) {
       <div class="d-sec"><h3>Почему такая оценка</h3><ul class="why">${why.map((w) =>
         `<li><span class="mk ${w.ok === true ? "ok" : w.ok === null ? "mid" : "no"}">${w.ok === true ? "✓" : w.ok === null ? "~" : "✕"}</span>${esc(w.text)}</li>`).join("")}</ul></div>
       ${qs.length ? `<div class="d-sec"><h3>Уточнить при звонке</h3><ol class="qs">${qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ol></div>` : ""}
+      </div><div class="d-col">
       <div class="d-sec"><h3>Факты с сайта</h3>${factRows}</div>
       <div class="d-sec"><h3>Категории</h3>${cats}</div>
+      </div><div class="d-wide">
       <div class="d-sec"><h3>Запрос коммерческого предложения</h3>
         <textarea class="rfq" id="rfq">${esc(rfqText(s, { city, categoryNames: Object.fromEntries(S.data.categories.map((c) => [c.id, c.name])) }))}</textarea>
         <div class="row" style="margin-top:8px">
@@ -234,10 +236,11 @@ function openDrawer(id) {
           ${s.contacts.emails[0] ? `<a class="btn ghost small" id="mailRfq" href="#">Открыть в почте</a>` : ""}
         </div></div>
       <div class="d-sec"><h3>Заметка</h3><textarea class="note" id="note">${esc(u.note || "")}</textarea></div>
-    </div>`;
+    </div></div>`;
   d.dataset.id = id;
   d.classList.add("open"); d.setAttribute("aria-hidden", "false");
   $("#backdrop").hidden = false;
+  document.body.classList.add("locked");
   d.scrollTop = 0;
   $("#copyRfq").onclick = async () => {
     try { await navigator.clipboard.writeText($("#rfq").value); toast("Текст скопирован"); } catch { $("#rfq").select(); toast("Выделил текст, скопируйте"); }
@@ -253,6 +256,7 @@ function openDrawer(id) {
 function closeDrawer() {
   const d = $("#drawer");
   d.classList.remove("open"); d.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("locked");
   $("#backdrop").hidden = !$("#filters").classList.contains("open") ? true : false;
   renderTray();
   if (S.view === "list") renderBoard(); else renderResults();
