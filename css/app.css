@@ -179,6 +179,7 @@ body.locked { overflow: hidden; }
 .d-head .icon-btn { margin-left: auto; flex: none; align-self: flex-start; }
 .d-body { padding: 20px 22px 26px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 22px 28px; align-items: start; }
 .d-col { display: grid; gap: 20px; min-width: 0; }
+@media (min-width: 601px) { .d-col:first-child { position: sticky; top: 108px; } }
 .d-wide { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px 28px; border-top: 1px solid var(--line); padding-top: 20px; }
 .d-wide .rfq { min-height: 240px; }
 .d-wide .note { min-height: 240px; }
