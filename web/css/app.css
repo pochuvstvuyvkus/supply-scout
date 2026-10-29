@@ -387,7 +387,7 @@ body.locked { overflow: hidden; }
   .fld-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .rfq-foot .btn { flex: 1; }
 }
-@media (max-width: 400px) { .fld-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 340px) { .fld-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* сравнение: колонки одной ширины, длинный текст в 3 строки */
 .cmp { table-layout: fixed; }
