@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit, moqRub,
-} from "./core.js?v=20";
+} from "./core.js?v=23";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -56,10 +56,13 @@ async function load() {
   const res = await fetch("data/suppliers.json", { cache: "no-cache" });
   S.data = await res.json();
   $("#progress").classList.remove("on");
-  try {
-    const h = await fetch("api/health", { cache: "no-store" });
-    S.api = h.ok && (await h.json()).ok === true;
-  } catch { S.api = false; }
+  // На GitHub Pages сервера нет: живой поиск включается, только когда сайт открыт с запущенного API
+  if (!location.hostname.endsWith("github.io")) {
+    try {
+      const h = await fetch("api/health", { cache: "no-store" });
+      S.api = h.ok && (await h.json()).ok === true;
+    } catch { S.api = false; }
+  }
   saveUser();
   renderAll();
   route();
