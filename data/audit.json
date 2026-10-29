@@ -1,22 +1,22 @@
 {
  "summary": {
-  "checked_at": "2026-10-29T14:55",
-  "suppliers": 143,
-  "sites_reachable": 143,
-  "checks": 1617,
-  "passed": 1616,
+  "checked_at": "2026-10-29T15:10",
+  "suppliers": 142,
+  "sites_reachable": 142,
+  "checks": 1566,
+  "passed": 1565,
   "pass_rate": 0.9994,
   "by_status": {
-   "ok": 1616,
+   "ok": 1565,
    "цитаты нет": 1
   }
  },
  "failed": [
   {
-   "id": "shefcompany.ru",
+   "id": "regul.su",
    "failed": [
     {
-     "key": "price_info",
+     "key": "category:bakery",
      "status": "цитаты нет"
     }
    ]

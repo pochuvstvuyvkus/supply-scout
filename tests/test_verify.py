@@ -1,7 +1,7 @@
 """Проверка, которая не даёт модели выдумывать: каждый случай, где ответ должен быть отброшен."""
 from collector.fetch import extract_contacts, normalize_phone
 from collector.search import is_blocked, parse_ddg
-from collector.verify import check_fact, find_inn, inn_valid, verify
+from collector.verify import category_problem, check_fact, find_inn, inn_valid, verify
 
 PAGES = [
     {"url": "https://example.ru/", "title": "ООО «Рыбный двор» — рыба оптом",
@@ -204,3 +204,25 @@ def test_seo_city_list_does_not_make_region_but_delivery_does():
         categories=[{"id": "fish", "evidence": "Лосось охлажденный", "page": 0}],
         regions_served=fact("по Москве и области", "Доставляем по Москве и области")))
     assert "msk" in card["regions"]
+
+
+def test_category_from_dishes_or_freight_is_rejected():
+    assert category_problem("rice", "Перевозка риса") is not None
+    assert category_problem("rice", "Пирог с рыбой и рисом") is not None
+    assert category_problem("meat", "Кулебяка с мясом и картофелем") is not None
+    assert category_problem("asian", "Тесто, рисовая бумага") is None      # для паназии рисовая бумага — товар
+    assert category_problem("rice", "Тесто, рисовая бумага") is not None
+    assert category_problem("packaging", "Посуда") is not None
+    assert category_problem("bakery", "Пирог с капустой") is None
+    assert category_problem("fish", "Лосось охлажденный") is None
+
+
+def test_field_specific_stop_words():
+    pages = [{"url": "https://z.ru/", "title": "", "contacts": {"phones": [], "emails": []},
+              "text": "Работаем с дистрибьюторами в сегменте HoReCa. Декларация соответствия - документ, подтверждающий качество. "
+                      "Купить сыр оптом в Москве. Особые условия при заказе от 150 000 рублей. Цены: 545,00 р"}]
+    assert check_fact(fact("да", "Работаем с дистрибьюторами в сегменте HoReCa"), pages, "horeca")[0] is None
+    assert check_fact(fact("Декларация соответствия", "Декларация соответствия - документ, подтверждающий качество"), pages, "certificates")[0] is None
+    assert check_fact(fact("Москва", "Купить сыр оптом в Москве"), pages, "city")[0] is None
+    assert check_fact(fact("от 150 000 рублей", "Особые условия при заказе от 150 000 рублей"), pages, "min_order")[0] is None
+    assert check_fact(fact("545,00 р", "Цены: 545,00 р"), pages, "price_info")[1] == "цена без названия товара"

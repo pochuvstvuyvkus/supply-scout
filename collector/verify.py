@@ -37,16 +37,19 @@ MAX_QUOTE = 250
 FIELD_RULES = {
     "price_info": {"need": r"\d[\d\s.,]*\s*(₽|руб|р\.|р\b|rub)|(₽|руб)\.?\s*\d",
                    "stop": r"скидк|перевоз|грузоперевоз|по запрос|доставк|бесплатн|%"},
-    "min_order": {"need": r"\d", "stop": r"зависит|по запрос|индивидуал|бесплатн"},
+    "min_order": {"need": r"минимальн|заказ|закупк|парти|отгрузк|мелк\w* опт",
+                  "stop": r"зависит|по запрос|индивидуал|бесплатн|особые условия|скидк|уровн|цен[аы]|упаковк\w* по"},
     "delivery": {"need": r"\d|бесплатн|собственн|свой транспорт|своим транспорт|рефрижератор|ежедневн|график|"
                          r"день в день|следующий день|сутк|самовывоз|автопарк|автомобил",
                  "stop": r"аренд"},
     "certificates": {"need": r"сертифик|деклараци|ветеринар|вет\.|меркури|хассп|haccp|iso|гост|честный знак|"
-                             r"документ|санитар|халяль|ветсвидетельств|сгр|ту\b", "stop": None},
+                             r"документ|санитар|халяль|ветсвидетельств|сгр|ту\b",
+                     "stop": r"документ,? подтверждающ|- документ|это документ|клиент|работающ\w* по принцип"},
     "horeca": {"need": r"ресторан|кафе|horeca|хорека|хорeca|общепит|общественн\w* питани|столов|гостиниц|отел|"
-                       r"бар|фуд-?корт|кейтеринг|предприяти\w* питани|пиццери|суши-?бар", "stop": r"консалтинг"},
+                       r"бар|фуд-?корт|кейтеринг|предприяти\w* питани|пиццери|суши-?бар",
+               "stop": r"консалтинг|дистрибьютор|салон|если вы"},
     "founded": {"need": r"\d|лет|год", "stop": None},
-    "city": {"need": None, "stop": r"ваш город|выбран|выберите город|выбрать город|на дом"},
+    "city": {"need": None, "stop": r"ваш город|выбран|выберите город|выбрать город|на дом|купить|заказать"},
 }
 
 CATEGORY_KEYWORDS = {
@@ -71,6 +74,28 @@ CATEGORY_KEYWORDS = {
     "bakery": r"хлеб|выпеч|булк|булоч|батон|багет|лаваш|тесто|кондитер|пекар|круассан|бриошь|чиабат|бейгл|"
               r"тортиль|пирог|пирож|слойк|хлебобулоч",
 }
+
+
+CATEGORY_STOP = {
+    "_all": r"перевоз|грузоперевоз|готов\w* блюд|от региональных поставщиков|доставка готов",
+    "rice": r"рисом|рисов\w* бумаг|рисов\w* лапш|пирог|блюд",
+    "meat": r"мясом|кулебяк|пирог|пельмен",
+    "fish": r"рыбой|пирог|кулебяк|свежий улов",
+    "grocery": r"сливочн",
+    "packaging": r"бутылка дип|дип-пот|ведро",
+}
+
+
+def category_problem(cat: str, evidence: str) -> str | None:
+    t = norm(evidence)
+    if not re.search(CATEGORY_KEYWORDS[cat], t):
+        return "цитата не о категории"
+    for key in ("_all", cat):
+        if key in CATEGORY_STOP and re.search(CATEGORY_STOP[key], t):
+            return "цитата не о категории"
+    if cat == "packaging" and len(evidence.split()) < 2:
+        return "цитата не о категории"  # одно слово «Посуда» в меню продуктового сайта
+    return None
 
 
 def field_problem(field: str, value: str, evidence: str) -> str | None:
@@ -130,6 +155,10 @@ def check_fact(fact: dict | None, pages: list[dict], field: str) -> tuple[dict |
     problem = field_problem(field, value, evidence)
     if problem:
         return None, problem
+    if field == "price_info" and not re.search(r"[а-яa-z]{4,}", re.sub(r"руб\w*|цен\w*|за кг|за шт", "", norm(value))):
+        return None, "цена без названия товара"
+    if field == "certificates" and len(evidence.split()) < 2:
+        return None, "цитата не о том поле"  # одиночное «Меркурий» — пункт меню, а не документы
     return {"value": value, "evidence": evidence, "url": url}, None
 
 
@@ -239,8 +268,9 @@ def verify(site: dict, extracted: dict) -> tuple[dict | None, list[dict]]:
         if len(ev) > MAX_QUOTE:
             rejected.append({"field": f"category:{c['id']}", "reason": "слишком длинная цитата"})
             continue
-        if not re.search(CATEGORY_KEYWORDS[c["id"]], norm(ev)):
-            rejected.append({"field": f"category:{c['id']}", "reason": "цитата не о категории"})
+        problem = category_problem(c["id"], ev)
+        if problem:
+            rejected.append({"field": f"category:{c['id']}", "reason": problem})
             continue
         url = find_quote(ev, c.get("page"), pages)
         if url:
@@ -257,6 +287,7 @@ def verify(site: dict, extracted: dict) -> tuple[dict | None, list[dict]]:
             for v in p.get("contacts", {}).get(k, []):
                 if v not in contacts[k]:
                     contacts[k].append(v)
+    contacts["phones"] = [ph for ph in contacts["phones"] if len(set(re.sub(r"\D", "", ph)[4:])) > 2]  # заглушки 999-99-99
     contacts = {k: v[:3] for k, v in contacts.items()}
     if not contacts["phones"] and not contacts["emails"]:
         return None, rejected + [{"field": "contacts", "reason": "на сайте нет ни телефона, ни почты"}]
