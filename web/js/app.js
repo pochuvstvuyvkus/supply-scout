@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness,
-} from "./core.js?v=2";
+} from "./core.js?v=3";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -191,6 +191,7 @@ function openDrawer(id) {
   const factRows = [{ key: "products", label: "Товары" }, { key: "city", label: "Город" }, { key: "address", label: "Адрес" },
     ...FACTS].map((f) => {
     const fact = s.facts?.[f.key];
+    if (!fact && ["products", "address", "founded"].includes(f.key)) return "";
     if (!fact) return `<div class="fact-row none"><div class="k">${f.label}</div><div class="v">на сайте не найдено</div></div>`;
     return `<div class="fact-row"><div class="k">${f.label}</div><div class="v">${esc(fact.value)}</div>
       <blockquote>«${esc(fact.evidence)}»</blockquote>
@@ -251,12 +252,13 @@ function closeDrawer() {
   const d = $("#drawer");
   d.classList.remove("open"); d.setAttribute("aria-hidden", "true");
   $("#backdrop").hidden = !$("#filters").classList.contains("open") ? true : false;
+  renderTray();
   if (S.view === "list") renderBoard(); else renderResults();
 }
 
 /* ---------- сравнение ---------- */
 function renderTray() {
-  $("#tray").hidden = S.compare.length === 0;
+  $("#tray").hidden = S.compare.length === 0 || S.view !== "search";
   $("#trayItems").innerHTML = S.compare.map((id) => `<span class="tray-item">${esc(byId(id)?.name)}<button data-uncmp="${esc(id)}" aria-label="Убрать"><svg class="ico" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>`).join("");
   $("#trayGo").disabled = S.compare.length < 2;
 }
@@ -266,19 +268,20 @@ function openCompare() {
   const rowsDef = [
     { key: "score", label: "Оценка" },
     { key: "regions", label: "Города" },
-    { key: "products", label: "Товары" },
+    { key: "cats", label: "Категории" },
     ...FACTS.map((f) => ({ key: f.key, label: f.label })),
     { key: "contacts", label: "Контакты" },
   ];
   const cell = (s, key, best) => {
     if (key === "score") return `<td><b>${score(s, S.f).value}</b></td>`;
     if (key === "regions") return `<td>${s.regions.map(regName).join(", ") || "—"}</td>`;
+    if (key === "cats") return `<td>${s.categories.map((c) => esc(catName(c.id))).join("<br>")}</td>`;
     if (key === "contacts") return `<td>${[...s.contacts.phones, ...s.contacts.emails].map(esc).join("<br>")}</td>`;
     const v = s.facts?.[key]?.value;
     return v ? `<td class="${best ? "best" : ""}">${esc(v)}</td>` : `<td class="no">нет данных</td>`;
   };
   const body = rowsDef.map((r) => {
-    const best = ["score", "regions", "contacts"].includes(r.key) ? list.map(() => false) : bestInRow(list, r.key);
+    const best = ["score", "regions", "contacts", "cats"].includes(r.key) ? list.map(() => false) : bestInRow(list, r.key);
     return `<tr><td>${r.label}</td>${list.map((s, i) => cell(s, r.key, best[i])).join("")}</tr>`;
   }).join("");
   $("#modal").innerHTML = `<div class="modal-box" role="dialog" aria-label="Сравнение">
@@ -324,7 +327,7 @@ function renderHow() {
       <div class="step"><div class="n">1</div><b>Поиск</b><p>Запросы по категориям и городам, отсев маркетплейсов, каталогов и справочников</p></div>
       <div class="step"><div class="n">2</div><b>Сайт</b><p>Главная и до 5 страниц: контакты, доставка, документы, условия для оптовиков</p></div>
       <div class="step"><div class="n">3</div><b>Модель</b><p>Gemini 2.5 Flash выписывает факты по строгой схеме и к каждому прикладывает цитату</p></div>
-      <div class="step"><div class="n">4</div><b>Проверка без модели</b><p>Цитата должна быть на странице дословно, числа и слова значения — в цитате. Иначе факт выбрасывается</p></div>
+      <div class="step"><div class="n">4</div><b>Проверка без модели</b><p>Цитата дословно на странице, относится к полю, все числа и пункты значения взяты из неё</p></div>
       <div class="step"><div class="n">5</div><b>Решение</b><p>Оценка под ваши приоритеты, сравнение, вопросы для звонка, запрос КП, статусы</p></div>
     </div>
     <h2>Последний сбор</h2>
@@ -379,6 +382,7 @@ function route() {
   S.view = ["search", "list", "how"].includes(v) ? v : "search";
   document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== `view-${S.view}`; });
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === S.view));
+  renderTray();
   if (S.view === "list") renderBoard();
   if (S.view === "how") renderHow();
   window.scrollTo(0, 0);
