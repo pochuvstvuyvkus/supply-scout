@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit, moqRub,
-} from "./core.js?v=18";
+} from "./core.js?v=20";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -34,7 +34,12 @@ const S = {
 const catName = (id) => S.data?.categories.find((c) => c.id === id)?.name || id;
 const regName = (id) => ({ ekb: "Екатеринбург", msk: "Москва", russia: "По России" }[id] || id);
 const byId = (id) => S.data.suppliers.find((s) => s.id === id);
-const saveUser = () => { store.set("user", S.user); $("#listCount").textContent = Object.values(S.user).filter((u) => u.saved).length; };
+const saveUser = () => {
+  store.set("user", S.user);
+  const n = Object.values(S.user).filter((u) => u.saved).length;
+  $("#listCount").textContent = n;
+  $("#listCount").hidden = n === 0;
+};
 const saveFilters = () => store.set("filters", S.f);
 
 function toast(msg) {
@@ -380,7 +385,7 @@ function renderCompare() {
   }).join("");
   const rows = sections.map((sec) => {
     const best = sec.key === "min_order" && n > 1 ? bestInRow(list, "min_order") : list.map(() => false);
-    const anyMoq = sec.key === "min_order" && list.some((x) => moqRub(x) !== null);
+    const anyMoq = sec.key === "min_order" && list.filter((x) => moqRub(x) !== null).length >= 2;
     const cells = list.map((s, k) => {
       if (sec.key === "cats") return `<div class="cc-cell">${s.categories.map((c) => `<span class="cc-chip">${esc(catName(c.id))}</span>`).join("")}</div>`;
       const v = s.facts?.[sec.key]?.value;
