@@ -121,14 +121,13 @@ export function questions(s) {
 }
 
 export function rfqText(s, opts = {}) {
-  const company = opts.company || "наша сеть ресторанов";
-  const city = opts.city || "Екатеринбург";
   const cats = (s.categories || []).map((c) => opts.categoryNames?.[c.id] || c.id).join(", ");
   const qs = questions(s);
   const lines = [
     "Добрый день!",
     "",
-    `Меня зовут ${opts.name || "[имя]"}, я отвечаю за закупки в компании ${company}. Ищем поставщика${cats ? ` (${cats.toLowerCase()})` : ""} с поставками в ${city}.`,
+    `Меня зовут ${opts.name || "[имя]"}, я отвечаю за закупки в компании ${opts.company || "[компания]"}.`,
+    `Ищем поставщика${cats ? `: ${cats.toLowerCase()}` : ""}. Город поставки: ${opts.city || "[город]"}.`,
     "",
     "Просим прислать коммерческое предложение и прайс-лист.",
   ];
@@ -136,7 +135,7 @@ export function rfqText(s, opts = {}) {
     lines.push("", "Также уточните, пожалуйста:");
     qs.forEach((q, i) => lines.push(`${i + 1}. ${q}`));
   }
-  lines.push("", "Спасибо!", opts.contact || "[телефон, почта]");
+  lines.push("", "Спасибо!", opts.name || "[имя]", opts.contact || "[телефон или почта]");
   return lines.join("\n");
 }
 

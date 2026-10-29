@@ -76,6 +76,7 @@ test("запрос КП содержит город, категории и не�
   const t = rfqText(B, { city: "Екатеринбург", categoryNames: { fish: "Рыба", asian: "Паназия" } });
   assert.match(t, /Екатеринбург/);
   assert.match(t, /рыба, паназия/);
+  assert.match(t, /Город поставки: Екатеринбург/);
   assert.match(t, /1\. /);
 });
 
