@@ -1,6 +1,6 @@
 import {
   FACTS, PRIORITIES, rank, score, reasons, questions, rfqText, toCSV, bestInRow, completeness, catalogHit,
-} from "./core.js?v=9";
+} from "./core.js?v=10";
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -305,18 +305,25 @@ function closeDrawer() {
   document.body.classList.remove("locked");
   $("#backdrop").hidden = !$("#filters").classList.contains("open") ? true : false;
   renderTray();
+  if (S.view === "compare") renderCompare();
   if (S.view === "list") renderBoard(); else renderResults();
 }
 
 /* ---------- сравнение ---------- */
 function renderTray() {
-  $("#tray").hidden = S.compare.length === 0 || S.view !== "search";
-  $("#trayItems").innerHTML = S.compare.map((id) => `<span class="tray-item">${esc(byId(id)?.name)}<button data-uncmp="${esc(id)}" aria-label="Убрать"><svg class="ico" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>`).join("");
-  $("#trayGo").disabled = S.compare.length < 2;
+  const n = S.compare.length;
+  $("#cmpCount").textContent = n;
+  $("#cmpCount").hidden = n === 0;
+  if (S.view === "compare") renderCompare();
 }
 
-function openCompare() {
+function renderCompare() {
   const list = S.compare.map(byId).filter(Boolean);
+  const box = $("#cmpPage");
+  if (!list.length) {
+    box.innerHTML = `<div class="empty"><b>Пусто</b></div>`;
+    return;
+  }
   const rowsDef = [
     { key: "score", label: "Оценка" },
     { key: "regions", label: "Города" },
@@ -325,21 +332,22 @@ function openCompare() {
     { key: "contacts", label: "Контакты" },
   ];
   const cell = (s, key, best) => {
-    if (key === "score") return `<td><b>${score(s, S.f).value}</b></td>`;
+    if (key === "score") return `<td><span class="score-pill">${score(s, S.f).value}</span></td>`;
     if (key === "regions") return `<td>${s.regions.map(regName).join(", ") || "—"}</td>`;
     if (key === "cats") return `<td>${s.categories.map((c) => esc(catName(c.id))).join("<br>")}</td>`;
-    if (key === "contacts") return `<td>${[...s.contacts.phones, ...s.contacts.emails].map(esc).join("<br>")}</td>`;
+    if (key === "contacts") return `<td>${s.contacts.phones.map((p) => `<a href="tel:${p.replace(/[^\d+]/g, "")}">${esc(p)}</a>`).join("<br>")}
+      ${s.contacts.emails.map((e) => `<br><a href="mailto:${esc(e)}">${esc(e)}</a>`).join("")}</td>`;
     const v = s.facts?.[key]?.value;
     return v ? `<td class="${best ? "best" : ""}">${esc(v)}</td>` : `<td class="no">нет данных</td>`;
   };
   const body = rowsDef.map((r) => {
-    const best = ["score", "regions", "contacts", "cats"].includes(r.key) ? list.map(() => false) : bestInRow(list, r.key);
+    const best = ["score", "regions", "contacts", "cats"].includes(r.key) || list.length < 2 ? list.map(() => false) : bestInRow(list, r.key);
     return `<tr><td>${r.label}</td>${list.map((s, i) => cell(s, r.key, best[i])).join("")}</tr>`;
   }).join("");
-  $("#modal").innerHTML = `<div class="modal-box" role="dialog" aria-label="Сравнение">
-    <div class="modal-head"><h2>Сравнение</h2><button class="icon-btn" data-close-modal aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
-    <div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${list.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div>`;
-  $("#modal").hidden = false;
+  box.innerHTML = `<div class="cmp-card"><div class="cmp-wrap"><table class="cmp"><thead><tr><th></th>${list.map((s) =>
+    `<th><div class="cmp-h"><button class="cmp-name" data-open="${esc(s.id)}">${esc(s.name)}</button>
+      <button class="icon-btn" data-uncmp="${esc(s.id)}" aria-label="Убрать"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <span class="cmp-host">${esc(s.host || s.domain)}</span></th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 
 /* ---------- мой список ---------- */
@@ -431,10 +439,11 @@ function runLive() {
 /* ---------- маршруты и события ---------- */
 function route() {
   const v = (location.hash || "#search").slice(1);
-  S.view = ["search", "list", "how"].includes(v) ? v : "search";
+  S.view = ["search", "compare", "list", "how"].includes(v) ? v : "search";
   document.querySelectorAll(".view").forEach((el) => { el.hidden = el.id !== `view-${S.view}`; });
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === S.view));
   renderTray();
+  if (S.view === "compare") renderCompare();
   if (S.view === "list") renderBoard();
   if (S.view === "how") renderHow();
   window.scrollTo(0, 0);
@@ -461,8 +470,7 @@ $("#qClear").onclick = () => { $("#q").value = ""; S.f.q = ""; $("#qClear").hidd
 $("#openFilters").onclick = openSheet;
 $("#resetFilters").onclick = () => { Object.assign(S.f, { q: "", category: "all", need: [], priorities: [], sort: "score" }); $("#q").value = ""; $("#qClear").hidden = true; update(); };
 $("#exportCsv").onclick = exportCsv;
-$("#trayGo").onclick = openCompare;
-$("#trayClear").onclick = () => { S.compare = []; store.set("compare", S.compare); renderTray(); renderResults(); };
+$("#cmpClear").onclick = () => { S.compare = []; store.set("compare", S.compare); renderTray(); renderResults(); };
 $("#liveBtn").onclick = runLive;
 $("#backdrop").onclick = () => { closeSheet(); if ($("#drawer").classList.contains("open")) closeDrawer(); };
 window.addEventListener("hashchange", route);
@@ -506,12 +514,12 @@ document.addEventListener("click", (e) => {
   if (d.cmp) {
     if (S.compare.includes(d.cmp)) S.compare = S.compare.filter((x) => x !== d.cmp);
     else if (S.compare.length >= 4) { toast("Сравнить можно до 4 поставщиков"); return; }
-    else S.compare.push(d.cmp);
+    else { S.compare.push(d.cmp); toast(`В сравнении: ${S.compare.length}`); }
     store.set("compare", S.compare);
     if (t.closest("#drawer")) { const on = S.compare.includes(d.cmp); t.classList.toggle("on", on); t.textContent = on ? "В сравнении" : "Сравнить"; }
     renderTray(); renderResults(); return;
   }
-  if (d.uncmp) { S.compare = S.compare.filter((x) => x !== d.uncmp); store.set("compare", S.compare); renderTray(); renderResults(); return; }
+  if (d.uncmp) { S.compare = S.compare.filter((x) => x !== d.uncmp); store.set("compare", S.compare); renderTray(); if (S.view === "search") renderResults(); return; }
   if (d.save) {
     const u = S.user[d.save] || {};
     S.user[d.save] = { ...u, saved: !u.saved, status: u.status || "Новый" };
